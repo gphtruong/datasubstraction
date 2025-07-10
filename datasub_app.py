@@ -2,59 +2,71 @@ import cv2
 import numpy as np
 import streamlit as st
 
-st.set_page_config(page_title="Background Subtraction", layout="centered")
-st.title("📸 Ghép vật thể vào nền - Background Subtraction (Streamlit Optimized)")
+st.set_page_config(page_title="Tách nền & Ghép ảnh", layout="centered")
+st.title("📸 Tách nền & Ghép vật thể từ ảnh có người vào nền")
 
 # === Upload ảnh
-bg_file = st.file_uploader("📤 Upload ảnh nền (background)", type=["jpg", "png"])
-curr_file = st.file_uploader("📤 Upload ảnh có vật thể (current)", type=["jpg", "png"])
+st.subheader("📤 Tải ảnh lên")
+bg_file = st.file_uploader("Ảnh nền (background)", type=["jpg", "jpeg", "png"])
+cur_file = st.file_uploader("Ảnh có vật thể (current)", type=["jpg", "jpeg", "png"])
 
-# Khi đã có đủ ảnh
-if bg_file and curr_file:
-    # Đọc ảnh từ buffer
-    file_bytes_bg = np.asarray(bytearray(bg_file.read()), dtype=np.uint8)
-    file_bytes_curr = np.asarray(bytearray(curr_file.read()), dtype=np.uint8)
+# === Khi có cả 2 ảnh
+if bg_file and cur_file:
+    try:
+        # Đọc ảnh từ file buffer
+        bg_bytes = np.asarray(bytearray(bg_file.read()), dtype=np.uint8)
+        cur_bytes = np.asarray(bytearray(cur_file.read()), dtype=np.uint8)
 
-    background = cv2.imdecode(file_bytes_bg, cv2.IMREAD_COLOR)
-    current = cv2.imdecode(file_bytes_curr, cv2.IMREAD_COLOR)
+        background = cv2.imdecode(bg_bytes, cv2.IMREAD_COLOR)
+        current = cv2.imdecode(cur_bytes, cv2.IMREAD_COLOR)
 
-    # Resiz
-    current = cv2.resize(current, (640, 480))
+        # Kiểm tra lỗi đọc ảnh
+        if background is None or current is None:
+            raise ValueError("Không thể đọc được ảnh. Kiểm tra định dạng hoặc nội dung file.")
 
-    # Chuyển sang xám
-    gray_bg = cv2.cvtColor(background, cv2.COLOR_BGR2GRAY)
-    gray_current = cv2.cvtColor(current, cv2.COLOR_BGR2GRAY)
+        # Resize ảnh current để khớp kích thước background
+        h_bg, w_bg = background.shape[:2]
+        current = cv2.resize(current, (w_bg, h_bg))
 
-    # Slider threshold
-    threshold_value = st.slider("Ngưỡng phát hiện khác biệt", 0, 100, 50)
+        # Chuyển sang grayscale
+        gray_bg = cv2.cvtColor(background, cv2.COLOR_BGR2GRAY)
+        gray_current = cv2.cvtColor(current, cv2.COLOR_BGR2GRAY)
 
-    # Tạo mask
-    diff = cv2.absdiff(gray_bg, gray_current)
-    _, mask = cv2.threshold(diff, threshold_value, 255, cv2.THRESH_BINARY)
+        # Ngưỡng điều chỉnh
+        threshold_value = st.slider("🔧 Ngưỡng tách nền", 0, 100, 50)
 
-    # Làm mượt + morphology
-    mask_blur = cv2.GaussianBlur(mask, (7, 7), 0)
-    kernel = np.ones((5, 5), np.uint8)
-    mask_clean = cv2.morphologyEx(mask_blur, cv2.MORPH_OPEN, kernel)
-    mask_clean = cv2.dilate(mask_clean, kernel, iterations=1)
+        # Tạo mask
+        diff = cv2.absdiff(gray_bg, gray_current)
+        _, mask = cv2.threshold(diff, threshold_value, 255, cv2.THRESH_BINARY)
 
-    # Tạo ảnh ghép
-    mask_3ch = cv2.merge([mask_clean] * 3)
-    inv_mask = cv2.bitwise_not(mask_clean)
-    inv_mask_3ch = cv2.merge([inv_mask] * 3)
+        # Làm mượt + morphology
+        mask_blur = cv2.GaussianBlur(mask, (7, 7), 0)
+        kernel = np.ones((5, 5), np.uint8)
+        mask_clean = cv2.morphologyEx(mask_blur, cv2.MORPH_OPEN, kernel)
+        mask_clean = cv2.dilate(mask_clean, kernel, iterations=1)
 
-    foreground = cv2.bitwise_and(current, mask_3ch)
-    background_part = cv2.bitwise_and(background, inv_mask_3ch)
-    final = cv2.add(background_part, foreground)
+        # Tạo mask 3 kênh
+        mask_3ch = cv2.merge([mask_clean]*3)
+        inv_mask = cv2.bitwise_not(mask_clean)
+        inv_mask_3ch = cv2.merge([inv_mask]*3)
 
-    # Hiển thị ảnh
-    col1, col2 = st.columns(2)
-    with col1:
-        st.image(cv2.cvtColor(background, cv2.COLOR_BGR2RGB), caption="Ảnh nền", use_container_width=True)
-        st.image(mask_clean, caption="Mask làm sạch", use_container_width=True)
-    with col2:
-        st.image(cv2.cvtColor(current, cv2.COLOR_BGR2RGB), caption="Ảnh có vật thể", use_container_width=True)
-        st.image(cv2.cvtColor(final, cv2.COLOR_BGR2RGB), caption="Ảnh đã ghép", use_container_width=True)
+        # Ghép ảnh
+        foreground = cv2.bitwise_and(current, mask_3ch)
+        background_part = cv2.bitwise_and(background, inv_mask_3ch)
+        final = cv2.add(background_part, foreground)
+
+        # Hiển thị kết quả
+        st.success("✅ Đã xử lý xong ảnh:")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.image(cv2.cvtColor(background, cv2.COLOR_BGR2RGB), caption="Ảnh nền", use_column_width=True)
+            st.image(mask_clean, caption="Mask tách nền", use_column_width=True)
+        with col2:
+            st.image(cv2.cvtColor(current, cv2.COLOR_BGR2RGB), caption="Ảnh có vật thể", use_column_width=True)
+            st.image(cv2.cvtColor(final, cv2.COLOR_BGR2RGB), caption="Kết quả ghép ảnh", use_column_width=True)
+
+    except Exception as e:
+        st.error(f"⚠️ Lỗi khi xử lý ảnh: `{e}`")
 
 else:
-    st.info("👈 Vui lòng upload cả hai ảnh để bắt đầu.")
+    st.info("👈 Vui lòng tải lên cả hai ảnh.")
