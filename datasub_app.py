@@ -3,7 +3,7 @@ import numpy as np
 import streamlit as st
 
 st.set_page_config(page_title="Tách nền & Ghép ảnh", layout="centered")
-st.title("📸 Tách nền & Ghép vật thể từ ảnh có người vào nền")
+st.title("📸 Tách nền & Ghép vật thể vào nền")
 
 # === Upload ảnh
 st.subheader("📤 Tải ảnh lên")
