@@ -51,11 +51,11 @@ if bg_file and curr_file:
     # Hiển thị ảnh
     col1, col2 = st.columns(2)
     with col1:
-        st.image(cv2.cvtColor(background, cv2.COLOR_BGR2RGB), caption="Ảnh nền", use_column_width=True)
-        st.image(mask_clean, caption="Mask làm sạch", use_column_width=True)
+        st.image(cv2.cvtColor(background, cv2.COLOR_BGR2RGB), caption="Ảnh nền", use_container_width=True)
+        st.image(mask_clean, caption="Mask làm sạch", use_container_width=True)
     with col2:
-        st.image(cv2.cvtColor(current, cv2.COLOR_BGR2RGB), caption="Ảnh có vật thể", use_column_width=True)
-        st.image(cv2.cvtColor(final, cv2.COLOR_BGR2RGB), caption="Ảnh đã ghép", use_column_width=True)
+        st.image(cv2.cvtColor(current, cv2.COLOR_BGR2RGB), caption="Ảnh có vật thể", use_container_width=True)
+        st.image(cv2.cvtColor(final, cv2.COLOR_BGR2RGB), caption="Ảnh đã ghép", use_container_width=True)
 
 else:
     st.info("👈 Vui lòng upload cả hai ảnh để bắt đầu.")
