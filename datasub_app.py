@@ -59,11 +59,11 @@ if bg_file and cur_file:
         st.success("✅ Đã xử lý xong ảnh:")
         col1, col2 = st.columns(2)
         with col1:
-            st.image(cv2.cvtColor(background, cv2.COLOR_BGR2RGB), caption="Ảnh nền", use_column_width=True)
-            st.image(mask_clean, caption="Mask tách nền", use_column_width=True)
+            st.image(cv2.cvtColor(background, cv2.COLOR_BGR2RGB), caption="Ảnh nền", use_container_width=True)
+            st.image(mask_clean, caption="Mask tách nền", use_container_width=True)
         with col2:
-            st.image(cv2.cvtColor(current, cv2.COLOR_BGR2RGB), caption="Ảnh có vật thể", use_column_width=True)
-            st.image(cv2.cvtColor(final, cv2.COLOR_BGR2RGB), caption="Kết quả ghép ảnh", use_column_width=True)
+            st.image(cv2.cvtColor(current, cv2.COLOR_BGR2RGB), caption="Ảnh có vật thể", use_container_width=True)
+            st.image(cv2.cvtColor(final, cv2.COLOR_BGR2RGB), caption="Kết quả ghép ảnh", use_container_width=True)
 
     except Exception as e:
         st.error(f"⚠️ Lỗi khi xử lý ảnh: `{e}`")
