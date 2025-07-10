@@ -18,8 +18,7 @@ if bg_file and curr_file:
     background = cv2.imdecode(file_bytes_bg, cv2.IMREAD_COLOR)
     current = cv2.imdecode(file_bytes_curr, cv2.IMREAD_COLOR)
 
-    # Resize
-    background = cv2.resize(background, (640, 480))
+    # Resiz
     current = cv2.resize(current, (640, 480))
 
     # Chuyển sang xám
