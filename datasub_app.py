@@ -35,23 +35,20 @@ if bg_file and cur_file:
         # Ngưỡng điều chỉnh
         threshold_value = st.slider("🔧 Ngưỡng tách nền", 0, 100, 50)
 
-        # Tạo mask
+        # Tạo mask vật thể bằng subtraction
         diff = cv2.absdiff(gray_bg, gray_current)
-        _, mask = cv2.threshold(diff, threshold_value, 255, cv2.THRESH_BINARY)
+        _, mask = cv2.threshold(diff, 60, 255, cv2.THRESH_BINARY)
 
-        # === Làm mượt để loại nhiễu nhỏ
-        mask_blur = cv2.GaussianBlur(mask, (9, 9), 0)
+       # Xử lý mask để làm rõ vật thể
+        mask = cv2.GaussianBlur(mask, (9, 9), 0)
+        kernel = np.ones((5, 5), np.uint8)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+        mask = cv2.dilate(mask, kernel, iterations=2)
 
-        # === Morphology nâng cao để:
-        # 1. Loại nhiễu (OPEN), 2. Lấp lỗ (CLOSE), 3. Mở rộng vật thể (DILATE)
-        kernel = np.ones((7, 7), np.uint8)
-        mask_clean = cv2.morphologyEx(mask_blur, cv2.MORPH_OPEN, kernel)
-        mask_clean = cv2.morphologyEx(mask_clean, cv2.MORPH_CLOSE, kernel)
-        mask_clean = cv2.dilate(mask_clean, kernel, iterations=2)
-        # Tạo mask 3 kênh
-        mask_3ch = cv2.merge([mask_clean]*3)
-        inv_mask = cv2.bitwise_not(mask_clean)
-        inv_mask_3ch = cv2.merge([inv_mask]*3)
+        # Tạo mask màu 3 kênh và tách vật thể
+        mask_3ch = cv2.merge([mask]*3)
+        foreground_only = cv2.bitwise_and(current, mask_3ch)
 
         # Lấy phần foreground (vật thể)
         foreground = cv2.bitwise_and(current, cv2.merge([mask_clean]*3))
