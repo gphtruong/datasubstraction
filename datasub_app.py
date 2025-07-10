@@ -24,4 +24,4 @@ THRESH_VALUE = 50  # cao hơn để loại bỏ nhiễu nhỏ
 _, mask = cv2.threshold(diff, THRESH_VALUE, 255, cv2.THRESH_BINARY)
 
 # 🎯 Làm mượt mask bằng Gaussian blur
-mask_blur = cv2_
+mask_blur = cv2.GaussianBlur(mask, (7, 7), 0)
