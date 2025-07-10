@@ -3,8 +3,8 @@ import numpy as np
 import streamlit as st
 
 # Đọc ảnh
-background = cv2.imread('background-2.jpg')
-current = cv2.imread('current.png')
+background = cv2.imread('background.jpg')
+current = cv2.imread('current.jpg')
 
 # Resize
 background = cv2.resize(background, (640, 480))
