@@ -39,20 +39,28 @@ if bg_file and cur_file:
         diff = cv2.absdiff(gray_bg, gray_current)
         _, mask = cv2.threshold(diff, threshold_value, 255, cv2.THRESH_BINARY)
 
-        # Làm mượt + morphology
-        mask_blur = cv2.GaussianBlur(mask, (7, 7), 0)
-        kernel = np.ones((5, 5), np.uint8)
-        mask_clean = cv2.morphologyEx(mask_blur, cv2.MORPH_OPEN, kernel)
-        mask_clean = cv2.dilate(mask_clean, kernel, iterations=1)
+        # === Làm mượt để loại nhiễu nhỏ
+        mask_blur = cv2.GaussianBlur(mask, (9, 9), 0)
 
+        # === Morphology nâng cao để:
+        # 1. Loại nhiễu (OPEN), 2. Lấp lỗ (CLOSE), 3. Mở rộng vật thể (DILATE)
+        kernel = np.ones((7, 7), np.uint8)
+        mask_clean = cv2.morphologyEx(mask_blur, cv2.MORPH_OPEN, kernel)
+        mask_clean = cv2.morphologyEx(mask_clean, cv2.MORPH_CLOSE, kernel)
+        mask_clean = cv2.dilate(mask_clean, kernel, iterations=2)
         # Tạo mask 3 kênh
         mask_3ch = cv2.merge([mask_clean]*3)
         inv_mask = cv2.bitwise_not(mask_clean)
         inv_mask_3ch = cv2.merge([inv_mask]*3)
 
-        # Ghép ảnh
-        foreground = cv2.bitwise_and(current, mask_3ch)
-        background_part = cv2.bitwise_and(background, inv_mask_3ch)
+        # Lấy phần foreground (vật thể)
+        foreground = cv2.bitwise_and(current, cv2.merge([mask_clean]*3))
+
+        # Lấy phần background không có vật thể
+        inv_mask = cv2.bitwise_not(mask_clean)
+        background_part = cv2.bitwise_and(background, cv2.merge([inv_mask]*3))
+
+        # Ghép: vật thể đặt lên background
         final = cv2.add(background_part, foreground)
 
         # Hiển thị kết quả
