@@ -1,3 +1,4 @@
-opencv-python-headless
-streamlit
+streamlit>=1.31
+opencv-python
 numpy
+Pillow
