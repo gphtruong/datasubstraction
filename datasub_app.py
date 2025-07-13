@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
+import os
 
 class ObjectSegmentationComposite:
     def __init__(self):
@@ -114,215 +115,141 @@ class ObjectSegmentationComposite:
         
         return result
     
-    def auto_segment_and_composite(self, source_path, background_path, output_path=None):
-        """Tự động tách và ghép ảnh"""
-        # Tải ảnh
-        source_img = self.load_image(source_path)
-        background_img = self.load_image(background_path)
+    def process_images(self, source_img, background_img, mask_img=None):
+        """
+        Xử lý ảnh với numpy arrays (dành cho Streamlit)
         
-        if source_img is None or background_img is None:
-            print(f"Không thể tải ảnh. Kiểm tra đường dẫn:")
-            print(f"Source: {source_path}")
-            print(f"Background: {background_path}")
+        Args:
+            source_img: numpy array của ảnh nguồn
+            background_img: numpy array của ảnh nền
+            mask_img: numpy array của mask (tùy chọn)
+        
+        Returns:
+            tuple: (result_image, mask_used, extracted_object)
+        """
+        try:
+            # Đảm bảo ảnh có định dạng đúng
+            if source_img is None or background_img is None:
+                return None, None, None
+            
+            # Nếu có mask được cung cấp
+            if mask_img is not None:
+                # Chuyển mask sang grayscale nếu cần
+                if len(mask_img.shape) == 3:
+                    mask = cv2.cvtColor(mask_img, cv2.COLOR_RGB2GRAY)
+                else:
+                    mask = mask_img
+                
+                # Sửa mask đảo ngược nếu cần
+                mask = self.fix_inverted_mask(mask)
+            else:
+                # Tạo mask tự động (tách nền xanh lá)
+                mask = self.create_mask_from_color(source_img, [60, 255, 255], tolerance=40)
+            
+            # Cải thiện mask
+            mask = self.improve_mask(mask)
+            
+            # Tách vật thể
+            object_extracted, mask_normalized = self.extract_object_with_mask(source_img, mask)
+            
+            # Resize background về kích thước phù hợp
+            target_height, target_width = 600, 800
+            bg_resized = cv2.resize(background_img, (target_width, target_height))
+            
+            # Resize object nếu quá lớn
+            obj_h, obj_w = object_extracted.shape[:2]
+            if obj_h > target_height * 0.8 or obj_w > target_width * 0.8:
+                scale = min(target_height * 0.8 / obj_h, target_width * 0.8 / obj_w)
+                new_w = int(obj_w * scale)
+                new_h = int(obj_h * scale)
+                object_extracted = cv2.resize(object_extracted, (new_w, new_h))
+                mask_normalized = cv2.resize(mask_normalized, (new_w, new_h))
+            
+            # Tính toán vị trí ghép (giữa ảnh)
+            bg_h, bg_w = bg_resized.shape[:2]
+            obj_h, obj_w = object_extracted.shape[:2]
+            position = ((bg_w - obj_w) // 2, (bg_h - obj_h) // 2)
+            
+            # Ghép ảnh
+            result = self.composite_images(bg_resized, object_extracted, mask_normalized, position)
+            
+            return result, mask, object_extracted
+            
+        except Exception as e:
+            print(f"Lỗi trong quá trình xử lý: {e}")
             return None, None, None
-        
-        # Tạo mask tự động (ví dụ: tách nền xanh lá)
-        # Bạn có thể điều chỉnh màu và tolerance theo nhu cầu
-        mask = self.create_mask_from_color(source_img, [60, 255, 255], tolerance=40)
-        
-        # Cải thiện mask
-        mask = self.improve_mask(mask)
-        
-        # Kiểm tra và sửa mask đảo ngược
-        mask = self.fix_inverted_mask(mask)
-        
-        # Tách vật thể
-        object_extracted, mask_normalized = self.extract_object_with_mask(source_img, mask)
-        
-        # Resize background nếu cần
-        bg_resized = cv2.resize(background_img, (800, 600))
-        
-        # Tính toán vị trí ghép (giữa ảnh)
-        bg_h, bg_w = bg_resized.shape[:2]
-        obj_h, obj_w = object_extracted.shape[:2]
-        position = ((bg_w - obj_w) // 2, (bg_h - obj_h) // 2)
-        
-        # Ghép ảnh
-        result = self.composite_images(bg_resized, object_extracted, mask_normalized, position)
-        
-        # Lưu kết quả
-        if output_path:
-            result_bgr = cv2.cvtColor(result, cv2.COLOR_RGB2BGR)
-            cv2.imwrite(output_path, result_bgr)
-        
-        return result, mask, object_extracted
-    
-    def visualize_results(self, original, mask, extracted, composite):
-        """Hiển thị kết quả"""
-        fig, axes = plt.subplots(2, 2, figsize=(15, 10))
-        
-        axes[0, 0].imshow(original)
-        axes[0, 0].set_title('Ảnh gốc')
-        axes[0, 0].axis('off')
-        
-        axes[0, 1].imshow(mask, cmap='gray')
-        axes[0, 1].set_title('Mask')
-        axes[0, 1].axis('off')
-        
-        axes[1, 0].imshow(extracted)
-        axes[1, 0].set_title('Vật thể đã tách')
-        axes[1, 0].axis('off')
-        
-        axes[1, 1].imshow(composite)
-        axes[1, 1].set_title('Kết quả ghép')
-        axes[1, 1].axis('off')
-        
-        plt.tight_layout()
-        plt.show()
 
-# Sử dụng
-def main():
-    # Tạo instance
+# Hàm tiện ích cho Streamlit
+def process_with_streamlit(source_image, background_image, mask_image=None):
+    """
+    Hàm tiện ích để xử lý ảnh trong Streamlit
+    
+    Args:
+        source_image: PIL Image hoặc numpy array
+        background_image: PIL Image hoặc numpy array  
+        mask_image: PIL Image hoặc numpy array (tùy chọn)
+    
+    Returns:
+        tuple: (result_image, mask_used, extracted_object)
+    """
     processor = ObjectSegmentationComposite()
     
-    # Đường dẫn ảnh (thay đổi theo ảnh của bạn)
-    source_path = "path/to/your/source_image.jpg"
-    background_path = "path/to/your/background_image.jpg"
-    output_path = "path/to/output/composite_result.jpg"
+    # Chuyển đổi PIL Image sang numpy array nếu cần
+    if hasattr(source_image, 'convert'):
+        source_img = np.array(source_image.convert('RGB'))
+    else:
+        source_img = source_image
+    
+    if hasattr(background_image, 'convert'):
+        background_img = np.array(background_image.convert('RGB'))
+    else:
+        background_img = background_image
+    
+    mask_img = None
+    if mask_image is not None:
+        if hasattr(mask_image, 'convert'):
+            mask_img = np.array(mask_image.convert('RGB'))
+        else:
+            mask_img = mask_image
+    
+    return processor.process_images(source_img, background_img, mask_img)
+
+# Hàm demo cho việc test
+def demo_with_file_paths(source_path, background_path, mask_path=None, output_path=None):
+    """
+    Demo function với đường dẫn file
+    """
+    processor = ObjectSegmentationComposite()
     
     # Kiểm tra file tồn tại
-    import os
     if not os.path.exists(source_path):
         print(f"Không tìm thấy file: {source_path}")
-        print("Vui lòng cập nhật đường dẫn đúng!")
-        return
+        return None, None, None
     
     if not os.path.exists(background_path):
         print(f"Không tìm thấy file: {background_path}")
-        print("Vui lòng cập nhật đường dẫn đúng!")
-        return
+        return None, None, None
     
-    # Xử lý tự động
-    result, mask, extracted = processor.auto_segment_and_composite(
-        source_path, background_path, output_path
-    )
-    
-    if result is not None:
-        # Hiển thị kết quả
-        source_img = processor.load_image(source_path)
-        processor.visualize_results(source_img, mask, extracted, result)
-        print(f"Kết quả đã được lưu tại: {output_path}")
-    else:
-        print("Có lỗi xảy ra trong quá trình xử lý")
-
-# Hàm tiện ích để xử lý mask có sẵn
-def process_with_existing_mask(source_path, background_path, mask_path, output_path):
-    """Xử lý với mask có sẵn"""
-    processor = ObjectSegmentationComposite()
-    
-    # Tải ảnh và mask
+    # Tải ảnh
     source_img = processor.load_image(source_path)
     background_img = processor.load_image(background_path)
-    mask_img = processor.load_image(mask_path)
+    mask_img = None
     
-    if source_img is None or background_img is None or mask_img is None:
-        print("Không thể tải được một hoặc nhiều ảnh")
-        return None
+    if mask_path and os.path.exists(mask_path):
+        mask_img = processor.load_image(mask_path)
     
-    # Chuyển mask sang grayscale
-    mask = cv2.cvtColor(mask_img, cv2.COLOR_RGB2GRAY)
+    # Xử lý
+    result, mask, extracted = processor.process_images(source_img, background_img, mask_img)
     
-    # Sửa mask đảo ngược nếu cần
-    mask = processor.fix_inverted_mask(mask)
+    # Lưu kết quả nếu có đường dẫn output
+    if result is not None and output_path:
+        result_bgr = cv2.cvtColor(result, cv2.COLOR_RGB2BGR)
+        cv2.imwrite(output_path, result_bgr)
+        print(f"Kết quả đã được lưu tại: {output_path}")
     
-    # Cải thiện mask
-    mask = processor.improve_mask(mask)
-    
-    # Tách vật thể
-    object_extracted, mask_normalized = processor.extract_object_with_mask(source_img, mask)
-    
-    # Ghép vào nền
-    bg_resized = cv2.resize(background_img, (800, 600))
-    bg_h, bg_w = bg_resized.shape[:2]
-    obj_h, obj_w = object_extracted.shape[:2]
-    position = ((bg_w - obj_w) // 2, (bg_h - obj_h) // 2)
-    
-    result = processor.composite_images(bg_resized, object_extracted, mask_normalized, position)
-    
-    # Lưu kết quả
-    result_bgr = cv2.cvtColor(result, cv2.COLOR_RGB2BGR)
-    cv2.imwrite(output_path, result_bgr)
-    
-    # Hiển thị kết quả
-    processor.visualize_results(source_img, mask, object_extracted, result)
-    
-    return result
+    return result, mask, extracted
 
-# Hàm demo cho Streamlit
-def demo_with_uploaded_files(source_image, background_image, mask_image=None):
-    """
-    Demo function for Streamlit with uploaded files
-    
-    Args:
-        source_image: numpy array of source image
-        background_image: numpy array of background image  
-        mask_image: numpy array of mask image (optional)
-    
-    Returns:
-        result_image, mask_used, extracted_object
-    """
-    processor = ObjectSegmentationComposite()
-    
-    try:
-        # Nếu có mask được cung cấp
-        if mask_image is not None:
-            # Chuyển mask sang grayscale nếu cần
-            if len(mask_image.shape) == 3:
-                mask = cv2.cvtColor(mask_image, cv2.COLOR_RGB2GRAY)
-            else:
-                mask = mask_image
-            
-            # Sửa mask đảo ngược nếu cần
-            mask = processor.fix_inverted_mask(mask)
-        else:
-            # Tạo mask tự động (tách nền xanh lá)
-            mask = processor.create_mask_from_color(source_image, [60, 255, 255], tolerance=40)
-        
-        # Cải thiện mask
-        mask = processor.improve_mask(mask)
-        
-        # Tách vật thể
-        object_extracted, mask_normalized = processor.extract_object_with_mask(source_image, mask)
-        
-        # Resize background nếu cần
-        bg_resized = cv2.resize(background_image, (800, 600))
-        
-        # Tính toán vị trí ghép (giữa ảnh)
-        bg_h, bg_w = bg_resized.shape[:2]
-        obj_h, obj_w = object_extracted.shape[:2]
-        position = ((bg_w - obj_w) // 2, (bg_h - obj_h) // 2)
-        
-        # Ghép ảnh
-        result = processor.composite_images(bg_resized, object_extracted, mask_normalized, position)
-        
-        return result, mask, object_extracted
-        
-    except Exception as e:
-        print(f"Lỗi trong quá trình xử lý: {e}")
-        return None, None, None
-
-if __name__ == "__main__":
-    # Chạy với mask tự động tạo
-    # main()
-    
-    # Để tránh lỗi, bạn nên cập nhật đường dẫn file trước khi chạy
-    print("Vui lòng cập nhật đường dẫn file trong hàm main() trước khi chạy!")
-    print("Sau đó bỏ comment dòng main() để thực thi.")
-    
-    # Hoặc chạy với mask có sẵn
-    # process_with_existing_mask(
-    #     "source.jpg", 
-    #     "background.jpg", 
-    #     "mask.jpg", 
-    #     "result.jpg"
-    # )
+# Test function (chỉ chạy khi được gọi trực tiếp)
+def test_function():
+    print("Test function - cập nhật đường dẫn file để test:")
+    print("demo_with_file_paths('source.jpg', 'background.jpg', 'mask.jpg', 'output.jpg')")
